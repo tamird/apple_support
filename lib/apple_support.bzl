@@ -187,6 +187,7 @@ def _platform_frameworks_path_placeholder(
     )
 
 def _sdkroot_path_placeholder():
+    # type: () -> string
     """Returns a placeholder value to be replaced with SDKROOT during action execution.
 
     In order to get this values replaced, you'll need to use the `apple_support.run()` API by
@@ -200,6 +201,7 @@ def _sdkroot_path_placeholder():
     return "__BAZEL_XCODE_SDKROOT__"
 
 def _xcode_path_placeholder():
+    # type: () -> string
     """Returns a placeholder value to be replaced with DEVELOPER_DIR during action execution.
 
     In order to get this values replaced, you'll need to use the `apple_support.run()` API by
@@ -256,6 +258,7 @@ def _kwargs_for_apple_platform(
     return processed_args
 
 def _action_required_attrs():
+    # type: () -> dict[string, Attribute]
     """Returns a dictionary with required attributes for registering actions on Apple platforms.
 
     This method adds private attributes which should not be used outside of the apple_support
@@ -281,6 +284,7 @@ def _action_required_attrs():
     }
 
 def _platform_constraint_attrs():
+    # type: () -> dict[string, Attribute]
     """Returns a dictionary of all known Apple platform constraints that can be resolved.
 
     The returned `dict` can be added to the rule's attributes using a \
@@ -507,6 +511,7 @@ def _target_arch_from_rule_ctx(
         ctx,
         *,
         fail_on_missing_constraint = True):
+    # type: (ctx, bool) -> string | None
     """Returns a `String` representing the target architecture based on constraints.
 
     The returned `String` will represent a cpu architecture, such as `arm64` or `arm64e`.
@@ -554,6 +559,7 @@ def _target_environment_from_rule_ctx(
         ctx,
         *,
         fail_on_missing_constraint = True):
+    # type: (ctx, bool) -> string | None
     """Returns a `String` representing the target environment based on constraints.
 
     The returned `String` will represent an environment, such as `device` or `simulator`.
@@ -591,6 +597,7 @@ def _target_os_from_rule_ctx(
         ctx,
         *,
         fail_on_missing_constraint = True):
+    # type: (ctx, bool) -> string | None
     """Returns a `String` representing the target OS based on constraints.
 
     The returned `String` will match an equivalent value from one of the platform definitions in
