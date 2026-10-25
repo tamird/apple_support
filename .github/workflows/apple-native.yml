@@ -1,0 +1,39 @@
+name: Apple toolchain shell tests
+
+on:
+  push:
+    branches: [codex/ci-apple-toolchain-flags]
+
+permissions:
+  contents: read
+
+jobs:
+  shell:
+    name: Toolchain flags (rules toolchain ${{ matrix.mode }})
+    runs-on: macos-15
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - mode: 'on'
+            args: ''
+          - mode: 'off'
+            args: --repo_env=APPLE_SUPPORT_RULES_BASED_TOOLCHAIN=0
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: 5fa3688179b9c7355ffb319c1e7cfd16dd256168
+          persist-credentials: false
+      - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
+        with:
+          bazelisk-version: 1.29.0
+      - name: Check toolchain flags
+        env:
+          BAZEL_EXTRA_ARGS: ${{ matrix.args }}
+          USE_BAZEL_VERSION: 9.3.1
+        run: |
+          test "$(uname -m)" = arm64
+          xcodebuild -version
+          bazel version
+          test/shell/toolchain_flags_test.sh
