@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          ref: 5fa3688179b9c7355ffb319c1e7cfd16dd256168
+          ref: a48ac3957698f55bb69a13b5cddafe18ed5e0696
           persist-credentials: false
       - uses: bazel-contrib/setup-bazel@c5acdfb288317d0b5c0bbd7a396a3dc868bb0f86
         with:
