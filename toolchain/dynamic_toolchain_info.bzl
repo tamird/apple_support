@@ -7,13 +7,15 @@ rules.
 
 load("@rules_cc//cc/toolchains:providers.bzl", "ExecutionRequirementsInfo")
 load("//lib:apple_support.bzl", "apple_support")
+load("//lib:xcode_support.bzl", "xcode_support")
 
 def _sdk_version_for_platform(xcode_config, platform_type):
+    # type: (XcodeVersionConfig, apple_platform_type) -> DottedVersion
     if platform_type == apple_common.platform_type.ios:
         return xcode_config.sdk_version_for_platform(apple_common.platform.ios_device)
     elif platform_type == apple_common.platform_type.tvos:
         return xcode_config.sdk_version_for_platform(apple_common.platform.tvos_device)
-    elif platform_type == getattr(apple_common.platform_type, "visionos", None):
+    elif platform_type == apple_common.platform_type.visionos:
         return xcode_config.sdk_version_for_platform(apple_common.platform.visionos_device)
     elif platform_type == apple_common.platform_type.watchos:
         return xcode_config.sdk_version_for_platform(apple_common.platform.watchos_device)
@@ -23,13 +25,14 @@ def _sdk_version_for_platform(xcode_config, platform_type):
         fail("Unhandled platform type: {}".format(platform_type))
 
 def _sdk_name(platform_type, is_simulator):
+    # type: (apple_platform_type, bool) -> str
     if platform_type == apple_common.platform_type.ios and is_simulator:
         return "iPhoneSimulator"
     elif platform_type == apple_common.platform_type.ios:
         return "iPhoneOS"
-    elif platform_type == getattr(apple_common.platform_type, "visionos", None) and is_simulator:
+    elif platform_type == apple_common.platform_type.visionos and is_simulator:
         return "XRSimulator"
-    elif platform_type == getattr(apple_common.platform_type, "visionos", None):
+    elif platform_type == apple_common.platform_type.visionos:
         return "XROS"
     elif platform_type == apple_common.platform_type.watchos and is_simulator:
         return "WatchSimulator"
@@ -44,7 +47,18 @@ def _sdk_name(platform_type, is_simulator):
     else:
         fail("Unhandled platform type: {}".format(platform_type))
 
+def _numeric_version(version):
+    # type: (DottedVersion) -> str
+    """Returns the leading numeric components of a version, e.g. "1.2.foo" -> "1.2"."""
+    parts = []
+    for part in str(version).split("."):
+        if not part.isdigit():
+            break
+        parts.append(part)
+    return ".".join(parts)
+
 def _dynamic_toolchain_info_impl(ctx):
+    # type: (...) -> list[TemplateVariableInfo]
     if ctx.target_platform_has_constraint(ctx.attr._arm64[platform_common.ConstraintValueInfo]):
         triple_arch = "arm64"
     elif ctx.target_platform_has_constraint(ctx.attr._arm64e[platform_common.ConstraintValueInfo]):
@@ -72,11 +86,13 @@ def _dynamic_toolchain_info_impl(ctx):
         platform_type = apple_common.platform_type.watchos
     elif ctx.target_platform_has_constraint(ctx.attr._visionos[platform_common.ConstraintValueInfo]):
         triple_os = "xros"
-        platform_type = getattr(apple_common.platform_type, "visionos", None)
+        platform_type = apple_common.platform_type.visionos
     elif ctx.target_platform_has_constraint(ctx.attr._linux[platform_common.ConstraintValueInfo]):
         return [platform_common.TemplateVariableInfo({"ARCH": triple_arch})]
     else:
         fail("Unknown OS in target platform")
+
+    apple_platform_info = apple_support.platform_info_from_rule_ctx(ctx)
 
     is_simulator = ctx.target_platform_has_constraint(ctx.attr._simulator[platform_common.ConstraintValueInfo])
     if is_simulator:
@@ -84,9 +100,17 @@ def _dynamic_toolchain_info_impl(ctx):
     else:
         triple_suffix = ""
 
-    xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]
-    target_os_version = xcode_config.minimum_os_for_platform_type(platform_type)
+    xcode_config = xcode_support.get_current_xcode(ctx)
     sdk_version = _sdk_version_for_platform(xcode_config, platform_type)
+
+    # Clang cannot parse non-numeric version suffixes in a target triple and
+    # silently falls back to a very old deployment target, so only the numeric
+    # part of the version goes into the triple.
+    target_os_version = _numeric_version(xcode_config.minimum_os_for_platform_type(platform_type))
+
+    # Any suffix following the numeric part of the SDK version is carried over
+    # to the SDK platform name.
+    sdk_name = _sdk_name(platform_type, is_simulator) + str(sdk_version)[len(_numeric_version(sdk_version)):]
 
     target = "{}-apple-{}{}{}".format(
         triple_arch,
@@ -102,7 +126,7 @@ def _dynamic_toolchain_info_impl(ctx):
     }
     if xcode_config.xcode_version():
         xcode_env = {
-            "APPLE_SDK_PLATFORM": _sdk_name(platform_type, is_simulator),
+            "APPLE_SDK_PLATFORM": sdk_name,
             "APPLE_SDK_VERSION_OVERRIDE": str(sdk_version),  # TODO: Remove once we drop bazel 7.x support
             "XCODE_VERSION_OVERRIDE": str(xcode_config.xcode_version()),
         }
@@ -110,14 +134,14 @@ def _dynamic_toolchain_info_impl(ctx):
     return [platform_common.TemplateVariableInfo(
         xcode_env | {
             "ARCH": triple_arch,
-            "PLATFORM_FRAMEWORKS": apple_support.path_placeholders.platform_frameworks(apple_fragment = ctx.fragments.apple),
+            "PLATFORM_FRAMEWORKS": apple_support.path_placeholders.platform_frameworks(apple_platform_info = apple_platform_info),
             "TARGET": target,
         },
     )]
 
 dynamic_toolchain_info = rule(
     implementation = _dynamic_toolchain_info_impl,
-    attrs = {
+    attrs = apple_support.platform_constraint_attrs() | {
         "_linux": attr.label(default = "@platforms//os:linux"),
         "_macos": attr.label(default = "@platforms//os:macos"),
         "_ios": attr.label(default = "@platforms//os:ios"),
@@ -141,7 +165,8 @@ dynamic_toolchain_info = rule(
 )
 
 def _xcode_execution_info_impl(ctx):
-    xcode_config = ctx.attr._xcode_config[apple_common.XcodeVersionConfig]
+    # type: (...) -> list[ExecutionRequirementsInfo]
+    xcode_config = xcode_support.get_current_xcode(ctx)
     return [
         ExecutionRequirementsInfo(
             label = ctx.label,
@@ -151,13 +176,5 @@ def _xcode_execution_info_impl(ctx):
 
 xcode_execution_info = rule(
     implementation = _xcode_execution_info_impl,
-    attrs = {
-        "_xcode_config": attr.label(default = configuration_field(
-            fragment = "apple",
-            name = "xcode_config_label",
-        )),
-    },
-    fragments = [
-        "apple",
-    ],
+    attrs = apple_support.action_required_attrs(),
 )

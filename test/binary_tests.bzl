@@ -6,6 +6,7 @@ load(
 )
 
 def binary_test_suite(name):
+    # type: (str) -> None
     """Test various aspects of binary generation
 
     Args:
@@ -73,6 +74,16 @@ def binary_test_suite(name):
         tags = [name],
         build_type = "device",
         cpus = {"visionos_cpus": "arm64"},
+        expected_platform_type = "visionos",
+        verifier_script = "//test/shell:verify_binary.sh",
+        target_under_test = "//test/test_data:visionos_binary",
+    )
+
+    apple_verification_test(
+        name = "{}_visionos_default_simulator_test".format(name),
+        tags = [name],
+        build_type = "simulator",
+        cpus = {"visionos_cpus": ""},
         expected_platform_type = "visionos",
         verifier_script = "//test/shell:verify_binary.sh",
         target_under_test = "//test/test_data:visionos_binary",
